@@ -21,7 +21,7 @@ V_Y_ESTRELA = 3
 QTD_ESTRELAS = 100
 
 ESCALA_NAVE = 0.5
-V_X_NAVE = 5  # velocidade padrão da nave
+V_X_NAVE = 5   # velocidade padrão da nave
 
 ESCALA_VIDA = 0.8
 QTD_VIDAS = 3
@@ -36,12 +36,12 @@ ESCALA_INIMIGO = 0.4
 LINS_INIMIGOS = 5
 COLS_INIMIGOS = 7
 
-V_X_INIMIGO_INI = 2   # velocidade mínima dos inimigos
+V_X_INIMIGO_INI = 2    # velocidade mínima dos inimigos
 V_Y_INIMIGO = 4
 A_X_INIMIGO = 0.1
 
 V_Y_INIMISSIL = 5
-P_INIMISSIL_INI = 500   # probabilidade inicial de disparo (quanto menor, mais tiros)
+P_INIMISSIL_INI = 500    # probabilidade inicial de disparo (quanto menor, mais tiros)
 
 ESCALA_UFO = 0.4
 V_X_UFO = 5
@@ -50,7 +50,7 @@ DT_UFO = 200
 
 # Power-ups
 ESCALA_POWERUP = 0.5
-DT_SPEED_BOOST = 600    # duração do aumento de velocidade da nave (quadros)
+DT_SPEED_BOOST = 600     # duração do aumento de velocidade da nave (quadros)
 
 # Explosões
 ESCALA_EXPLOSAO = 0.7
@@ -155,7 +155,7 @@ class ExplosionSprite(arcade.Sprite):
         self._frame = 0.0
 
     def update(self, delta_time: float = 1 / 60):
-        self._frame += 0.25  # velocidade da animação
+        self._frame += 0.25   # velocidade da animação
         if self._frame >= len(self.textures):
             self.remove_from_sprite_lists()
         else:
@@ -167,10 +167,10 @@ class PowerUpSprite(arcade.Sprite):
 
     def __init__(self, tipo: str, filename, x, y):
         super().__init__(filename, ESCALA_POWERUP)
-        self.tipo = tipo  # "speed" ou "life"
+        self.tipo = tipo   # "speed" ou "life"
         self.center_x = x
         self.center_y = y
-        self.change_y = -2  # cai lentamente
+        self.change_y = -2   # cai lentamente
 
 # ------------------------ JOGO ------------------------
 class MeuJogo(arcade.Window):
@@ -190,6 +190,7 @@ class MeuJogo(arcade.Window):
         self.ufo_list = arcade.SpriteList()
         self.explosao_list = arcade.SpriteList()
         self.powerup_list = arcade.SpriteList()
+        self.background_list = arcade.SpriteList() # <--- NOVO: Lista para o sprite de fundo
 
         # Sons
         path_audio = os.path.join("spaceshooter", "Audio")
@@ -260,7 +261,7 @@ class MeuJogo(arcade.Window):
         self.tipo_inimigo = [f"enemyGreen{i+1}.png" for i in range(5)]
 
         self.set_mouse_visible(True)
-        arcade.set_background_color(arcade.color.MIDNIGHT_BLUE)
+        # arcade.set_background_color(arcade.color.MIDNIGHT_BLUE) # REMOVA ESTA LINHA OU COMENTE
 
         # Gerenciador de UI para os botões
         self.manager = arcade.gui.UIManager()
@@ -272,7 +273,6 @@ class MeuJogo(arcade.Window):
         self.setup_buttons()
 
         self.set_active_buttons(GAME_STATE_MENU)
-
 
     def set_active_buttons(self, game_state):
         """Ativa/desativa os botões com base no estado do jogo."""
@@ -369,7 +369,20 @@ class MeuJogo(arcade.Window):
 
     # ------------------------ CONFIGURAÇÕES INICIAIS ------------------------
     def inicia_bg(self):
-        """Cria as estrelas de fundo."""
+        """Cria as estrelas de fundo e o sprite de imagem de fundo."""
+        # Limpa a lista de fundo antes de adicionar um novo sprite, caso seja chamada mais de uma vez
+        self.background_list = arcade.SpriteList() 
+        path_backgrounds = os.path.join("spaceshooter", "PNG", "Backgrounds")
+        try:
+            background_sprite = arcade.Sprite(os.path.join(path_backgrounds, "fundo_espaco.png"), scale=1.0)
+            background_sprite.center_x = LARG_TELA / 2
+            background_sprite.center_y = ALT_TELA / 2
+            self.background_list.append(background_sprite) # <--- Adiciona o sprite à lista
+        except FileNotFoundError:
+            print("AVISO: Imagem de fundo 'fundo_espaco.png' não encontrada. Usando estrelas e cor de fundo padrão.")
+            self.background_list = None # Se não houver imagem, define a lista como None para não tentar desenhá-la
+            arcade.set_background_color(arcade.color.MIDNIGHT_BLUE) # Fallback para cor
+
         self.estrela_list = arcade.SpriteList()
         path_efeitos = os.path.join("spaceshooter", "PNG", "Effects")
         for _ in range(QTD_ESTRELAS):
@@ -393,6 +406,8 @@ class MeuJogo(arcade.Window):
         self.ufo_list = arcade.SpriteList()
         self.explosao_list = arcade.SpriteList()
         self.powerup_list = arcade.SpriteList()
+        # Não reinicia self.background_list aqui, pois ele é configurado apenas uma vez no inicia_bg
+        # ou se a fase reiniciar, o inicia_bg será chamado novamente para recriar as estrelas e o background.
 
         # Dificuldade
         self.atualiza_dificuldade()
@@ -470,6 +485,11 @@ class MeuJogo(arcade.Window):
     # ------------------------ DRAW ------------------------
     def on_draw(self):
         self.clear()
+        # --- Desenha a lista de fundo primeiro ---
+        if self.background_list: # Verifica se a lista não é None (em caso de erro de carregamento)
+            self.background_list.draw()
+        # --- Fim da lista de fundo ---
+
         self.estrela_list.draw()
 
         if self.game_state == GAME_STATE_MENU:
@@ -681,7 +701,7 @@ class MeuJogo(arcade.Window):
 
 def main():
     window = MeuJogo()
-    window.inicia_bg()
+    window.inicia_bg() # Chama para carregar as estrelas e o background
     arcade.run()
 
 
