@@ -48,7 +48,7 @@ DT_UFO = 200
 
 # Power-ups
 ESCALA_POWERUP = 0.5
-DT_SPEED_BOOST = 600  # duração do aumento de velocidade da nave (quadros)
+DT_SPEED_BOOST = 600   # duração do aumento de velocidade da nave (quadros)
 
 # Explosões
 ESCALA_EXPLOSAO = 0.7
@@ -187,7 +187,6 @@ class MeuJogo(arcade.Window):
         self.snd_explosion = arcade.load_sound(os.path.join(path_audio, "explosion2.ogg"))
         try:
             self.music = arcade.load_sound(os.path.join(path_audio, "background.ogg"), streaming=True)
-            # A correção está aqui: Inicia a reprodução e depois define a propriedade loop.
             self.music_player = self.music.play(volume=0.4)
             self.music_player.loop = True
         except FileNotFoundError:
@@ -371,7 +370,9 @@ class MeuJogo(arcade.Window):
             self.revive += 1
             if self.revive >= DT_REVIVE:
                 self.revive = 0
-                self.nave_list[0].alpha = 255
+                # Verifica se a nave ainda existe antes de tentar mudar o alpha
+                if self.nave_list:
+                    self.nave_list[0].alpha = 255
 
         # Timer de bônus do UFO (para disparo duplo)
         if self.bonus_ufo:
@@ -397,20 +398,23 @@ class MeuJogo(arcade.Window):
                     self.cria_explosao(im.center_x, im.center_y)
                     im.remove_from_sprite_lists()
             # Contra UFO
-            ufo_hit = arcade.check_for_collision_with_list(missil, self.ufo_list)
-            if ufo_hit:
+            ufo_hit_this_frame = arcade.check_for_collision_with_list(missil, self.ufo_list)
+            if ufo_hit_this_frame:
                 missil.remove_from_sprite_lists()
-                for ufo in ufo_hit:
-                    self.cria_explosao(ufo.center_x, ufo.center_y)
-                    self.cria_powerup(ufo.center_x, ufo.center_y)
-                    ufo.remove_from_sprite_lists()
+                for ufo in ufo_hit_this_frame:
+                    # Verifica se o UFO ainda está em alguma lista antes de tentar removê-lo novamente
+                    if ufo in self.ufo_list:
+                        self.cria_explosao(ufo.center_x, ufo.center_y)
+                        self.cria_powerup(ufo.center_x, ufo.center_y)
+                        ufo.remove_from_sprite_lists()
             # Fora da tela
             if missil.bottom > ALT_TELA:
                 missil.remove_from_sprite_lists()
 
         # ----- Colisões dos mísseis inimigos -----
         for inimissil in self.inimissil_list:
-            if self.revive == 0 and arcade.check_for_collision_with_list(inimissil, self.nave_list):
+            # Verifica se a nave existe e se não está invencível
+            if self.nave_list and self.revive == 0 and arcade.check_for_collision_with_list(inimissil, self.nave_list):
                 self.cria_explosao(inimissil.center_x, inimissil.center_y)
                 inimissil.remove_from_sprite_lists()
                 if self.vida_list:
@@ -424,7 +428,6 @@ class MeuJogo(arcade.Window):
                 inimissil.remove_from_sprite_lists()
 
         # ----- Power-ups -----
-        # É importante garantir que self.nave_list[0] exista antes de tentar acessá-lo.
         if self.nave_list:
             for power in arcade.check_for_collision_with_list(self.nave_list[0], self.powerup_list):
                 if power.tipo == "speed":
@@ -443,17 +446,17 @@ class MeuJogo(arcade.Window):
             self.game_over = True
 
         # ----- Movimento dos inimigos e direção -----
-        if self.inimigo_list:  # Só calcula min/max se houver inimigos
+        if self.inimigo_list:
             x_min = min([inimigo.left for inimigo in self.inimigo_list])
             x_max = max([inimigo.right for inimigo in self.inimigo_list])
             if x_min < 0 or x_max > LARG_TELA:
                 for inimigo in self.inimigo_list:
-                    # Ajuste para garantir que a mudança de direção aconteça e a velocidade acelere.
                     inimigo.change_x = -inimigo.change_x
-                    if abs(inimigo.change_x) < self.vel_inimigo_x * 2: # Evita aceleração infinita
+                    if abs(inimigo.change_x) < self.vel_inimigo_x * 2:
                         inimigo.change_x += math.copysign(A_X_INIMIGO, inimigo.change_x)
                     inimigo.center_y -= V_Y_INIMIGO
-        else: # Se não há inimigos, não há movimento a ser calculado
+        # Caso não haja inimigos, garante que x_min e x_max não sejam acessados de uma lista vazia.
+        else:
             x_min = 0
             x_max = 0
 
@@ -465,18 +468,16 @@ class MeuJogo(arcade.Window):
                 self.inimissil_list.append(inimissil)
 
         # ----- Criação de UFO -----
-        # Garante que apenas um UFO esteja na tela por vez, se desejado, ou ajuste a lógica.
         if not self.ufo_list and random.randrange(P_UFO) == 0:
             path_png = os.path.join("spaceshooter", "PNG")
             ufo = arcade.Sprite(os.path.join(path_png, "ufoBlue.png"), ESCALA_UFO)
-            # Determina de qual lado o UFO virá
             if random.random() < 0.5:
                 ufo.change_x = V_X_UFO
                 ufo.left = -ufo.width
             else:
                 ufo.change_x = -V_X_UFO
                 ufo.right = LARG_TELA + ufo.width
-            ufo.top = ALT_TELA - 50 # Posição mais baixa para o UFO
+            ufo.top = ALT_TELA - 50
             self.ufo_list.append(ufo)
 
         for ufo in self.ufo_list:
