@@ -2,6 +2,7 @@ import random
 import arcade
 import math
 import os
+import arcade.gui
 
 """
 Invaxians – Versão aprimorada
@@ -9,7 +10,8 @@ Invaxians – Versão aprimorada
 • Sons de disparo, explosão e música de fundo (arcade.Sound)
 • Dificuldade dinâmica (velocidade dos inimigos e frequência de disparo)
 • Animações de explosão usando arcade.SpriteList
-• Power‑ups (velocidade e vida extra) liberados pelos UFOs
+• Power-ups (velocidade e vida extra) liberados pelos UFOs
+• Botões de Iniciar Jogo e Recomeçar
 """
 
 # ------------------------ CONSTANTES GERAIS ------------------------
@@ -48,7 +50,7 @@ DT_UFO = 200
 
 # Power-ups
 ESCALA_POWERUP = 0.5
-DT_SPEED_BOOST = 600   # duração do aumento de velocidade da nave (quadros)
+DT_SPEED_BOOST = 600    # duração do aumento de velocidade da nave (quadros)
 
 # Explosões
 ESCALA_EXPLOSAO = 0.7
@@ -56,8 +58,16 @@ ESCALA_EXPLOSAO = 0.7
 # Janela
 LARG_TELA = 800
 ALT_TELA = 600
-MARGEM_Y_TELA = 25
 TIT_TELA = "Invaxians"
+
+# --- CONSTANTE ADICIONADA: MARGEM INFERIOR DA TELA ---
+MARGEM_Y_TELA = 40
+# -----------------------------------------------------
+
+# Estados do jogo
+GAME_STATE_MENU = 0
+GAME_STATE_PLAYING = 1
+GAME_STATE_GAME_OVER = 2
 
 # ------------------------ SPRITES AUXILIARES ------------------------
 class EstrelaSprite(arcade.Sprite):
@@ -89,7 +99,7 @@ class NaveSprite(arcade.Sprite):
     def __init__(self, filename):
         super().__init__(filename, ESCALA_NAVE)
         self.center_x = LARG_TELA / 2
-        self.bottom = MARGEM_Y_TELA
+        self.bottom = MARGEM_Y_TELA # <--- Usando MARGEM_Y_TELA
 
     def update(self, delta_time: float = 1 / 60):
         if self.left < 0:
@@ -116,7 +126,7 @@ class InimigoSprite(arcade.Sprite):
         super().__init__(filename, ESCALA_INIMIGO)
         i = col - COLS_INIMIGOS / 2
         x = LARG_TELA / 2 + 1.2 * i * self.width
-        y = (ALT_TELA - MARGEM_Y_TELA) - 1.2 * lin * self.height
+        y = (ALT_TELA - MARGEM_Y_TELA) - 1.2 * lin * self.height # <--- Usando MARGEM_Y_TELA
         self.center_x = x
         self.top = y
         self.change_x = vel_x
@@ -169,17 +179,17 @@ class MeuJogo(arcade.Window):
         self.base_path = os.path.dirname(os.path.abspath(__file__))
         os.chdir(self.base_path)
 
-        # Listas de sprites
-        self.estrela_list: arcade.SpriteList | None = None
-        self.nave_list: arcade.SpriteList | None = None
-        self.vida_list: arcade.SpriteList | None = None
-        self.fase_list: arcade.SpriteList | None = None
-        self.missil_list: arcade.SpriteList | None = None
-        self.inimigo_list: arcade.SpriteList | None = None
-        self.inimissil_list: arcade.SpriteList | None = None
-        self.ufo_list: arcade.SpriteList | None = None
-        self.explosao_list: arcade.SpriteList | None = None
-        self.powerup_list: arcade.SpriteList | None = None
+        # Listas de sprites - Inicialize-as SEMPRE como SpriteList vazias
+        self.estrela_list = arcade.SpriteList()
+        self.nave_list = arcade.SpriteList()
+        self.vida_list = arcade.SpriteList()
+        self.fase_list = arcade.SpriteList()
+        self.missil_list = arcade.SpriteList()
+        self.inimigo_list = arcade.SpriteList()
+        self.inimissil_list = arcade.SpriteList()
+        self.ufo_list = arcade.SpriteList()
+        self.explosao_list = arcade.SpriteList()
+        self.powerup_list = arcade.SpriteList()
 
         # Sons
         path_audio = os.path.join("spaceshooter", "Audio")
@@ -187,10 +197,10 @@ class MeuJogo(arcade.Window):
         self.snd_explosion = arcade.load_sound(os.path.join(path_audio, "explosion2.ogg"))
         try:
             self.music = arcade.load_sound(os.path.join(path_audio, "background.ogg"), streaming=True)
-            self.music_player = self.music.play(volume=0.4)
-            self.music_player.loop = True
+            self.music_player = self.music.play(volume=0.4, loop=True)
+            self.music_player.pause()
         except FileNotFoundError:
-            self.music_player = None  # Música opcional
+            self.music_player = None
 
         # Texturas de explosão (pré-carregadas para performance)
         path_exp = os.path.join("spaceshooter", "PNG", "Effects")
@@ -198,29 +208,164 @@ class MeuJogo(arcade.Window):
             arcade.load_texture(os.path.join(path_exp, f"explosion0{i}.png")) for i in range(9)
         ]
 
+        # --- CARREGAR TEXTURAS DOS BOTÕES ---
+        path_buttons = os.path.join(self.base_path, "spaceshooter", "PNG", "UI", "Buttons")
+        self.use_image_buttons = True
+        try:
+            # Botão de Iniciar
+            self.start_tex_normal = arcade.load_texture(os.path.join(path_buttons, "start_button_normal.png"))
+            self.start_tex_hover = arcade.load_texture(os.path.join(path_buttons, "start_button_hover.png"))
+            self.start_tex_pressed = arcade.load_texture(os.path.join(path_buttons, "start_button_pressed.png"))
+
+            # Botão de Recomeçar
+            self.restart_tex_normal = arcade.load_texture(os.path.join(path_buttons, "restart_button_normal.png"))
+            self.restart_tex_hover = arcade.load_texture(os.path.join(path_buttons, "restart_button_hover.png"))
+            self.restart_tex_pressed = arcade.load_texture(os.path.join(path_buttons, "restart_button_pressed.png"))
+
+        except FileNotFoundError as e:
+            print(f"Erro ao carregar textura do botão: {e}. Verifique o caminho e o nome dos arquivos.")
+            print("Usando botões de texto como fallback.")
+            self.use_image_buttons = False
+        # --- FIM DO CARREGAMENTO DE TEXTURAS DOS BOTÕES ---
+
         # Estados do jogo
         self.placar = 0
-        self.game_over = False
+        self.game_state = GAME_STATE_MENU
         self.revive = 0
         self.fase = 1
         self.bonus_ufo = 0
         self.pausado = False
-        self.speed_timer = 0  # contagem regressiva para boost de velocidade
+        self.speed_timer = 0
 
         # Dificuldade dinâmica
         self.vel_inimigo_x = V_X_INIMIGO_INI
         self.p_inimissil = P_INIMISSIL_INI
 
         # Textos
-        self.score_text: arcade.Text | None = None
-        self.game_over_text: arcade.Text | None = None
-        self.pause_text: arcade.Text | None = None
+        self.score_text = arcade.Text("0", 5, ALT_TELA - 5, arcade.color.WHITE, 20, anchor_y="top", bold=True, font_name="Courier New")
+        self.game_over_text = arcade.Text(
+            "GAME OVER", LARG_TELA / 2, ALT_TELA / 2 + 50,
+            arcade.color.RED, 60, anchor_x="center", anchor_y="center", bold=True, font_name="Courier New"
+        )
+        self.pause_text = arcade.Text(
+            "PAUSE", LARG_TELA / 2, ALT_TELA / 2,
+            arcade.color.GREEN, 60, anchor_x="center", anchor_y="center", bold=True, font_name="Courier New"
+        )
+        self.title_text = arcade.Text(
+            "INVAXIANS", LARG_TELA / 2, ALT_TELA / 2 + 50,
+            arcade.color.YELLOW, 60, anchor_x="center", anchor_y="center", bold=True, font_name="Courier New"
+        )
 
         # Tipos de inimigo
         self.tipo_inimigo = [f"enemyGreen{i+1}.png" for i in range(5)]
 
-        self.set_mouse_visible(False)
+        self.set_mouse_visible(True)
         arcade.set_background_color(arcade.color.MIDNIGHT_BLUE)
+
+        # Gerenciador de UI para os botões
+        self.manager = arcade.gui.UIManager()
+        self.manager.enable()
+
+        # Botões
+        self.start_button = None
+        self.restart_button = None
+        self.setup_buttons()
+
+        self.set_active_buttons(GAME_STATE_MENU)
+
+
+    def set_active_buttons(self, game_state):
+        """Ativa/desativa os botões com base no estado do jogo."""
+        self.manager.clear()
+
+        if game_state == GAME_STATE_MENU:
+            self.manager.add(self.start_button)
+        elif game_state == GAME_STATE_GAME_OVER:
+            self.manager.add(self.restart_button)
+
+    def setup_buttons(self):
+        """Configura os botões de iniciar e recomeçar."""
+        if self.use_image_buttons:
+            # Botão de Iniciar Jogo com Imagens
+            self.start_button = arcade.gui.UITextureButton(
+                texture=self.start_tex_normal,
+                texture_hovered=self.start_tex_hover,
+                texture_pressed=self.start_tex_pressed,
+                center_x=LARG_TELA / 2,
+                center_y=ALT_TELA / 2 - 50,
+                scale=1.0
+            )
+            self.start_button.on_click = self.on_start_button_click
+
+            # Botão de Recomeçar com Imagens
+            self.restart_button = arcade.gui.UITextureButton(
+                texture=self.restart_tex_normal,
+                texture_hovered=self.restart_tex_hover,
+                texture_pressed=self.restart_tex_pressed,
+                center_x=LARG_TELA / 2,
+                center_y=ALT_TELA / 2 - 50,
+                scale=1.0
+            )
+            self.restart_button.on_click = self.on_restart_button_click
+        else:
+            # Fallback para botões de texto se as imagens não forem encontradas
+            self.start_button = arcade.gui.UIFlatButton(
+                text="Iniciar Jogo",
+                center_x=LARG_TELA / 2,
+                center_y=ALT_TELA / 2 - 50,
+                width=200,
+                height=50,
+                style={
+                    "font_size": 18,
+                    "font_name": "Arial",
+                    "font_color": arcade.color.WHITE,
+                    "bg_color": arcade.color.DARK_GREEN,
+                    "border_width": 2,
+                    "border_color": arcade.color.WHITE,
+                    "bg_color_pressed": arcade.color.LIGHT_GREEN,
+                    "font_color_pressed": arcade.color.BLACK,
+                }
+            )
+            self.start_button.on_click = self.on_start_button_click
+
+            self.restart_button = arcade.gui.UIFlatButton(
+                text="Recomeçar",
+                center_x=LARG_TELA / 2,
+                center_y=ALT_TELA / 2 - 50,
+                width=200,
+                height=50,
+                style={
+                    "font_size": 18,
+                    "font_name": "Arial",
+                    "font_color": arcade.color.WHITE,
+                    "bg_color": arcade.color.DARK_RED,
+                    "border_width": 2,
+                    "border_color": arcade.color.WHITE,
+                    "bg_color_pressed": arcade.color.LIGHT_RED,
+                    "font_color_pressed": arcade.color.BLACK,
+                }
+            )
+            self.restart_button.on_click = self.on_restart_button_click
+
+
+    def on_start_button_click(self, event):
+        """Chamado quando o botão 'Iniciar Jogo' é clicado."""
+        self.game_state = GAME_STATE_PLAYING
+        self.set_active_buttons(self.game_state)
+        self.set_mouse_visible(False)
+        self.inicia_jogo()
+        if self.music_player:
+            self.music_player.play()
+
+    def on_restart_button_click(self, event):
+        """Chamado quando o botão 'Recomeçar' é clicado."""
+        self.game_state = GAME_STATE_PLAYING
+        self.set_active_buttons(self.game_state)
+        self.set_mouse_visible(False)
+        self.fase = 1
+        self.inicia_jogo()
+        if self.music_player:
+            self.music_player.play()
 
     # ------------------------ CONFIGURAÇÕES INICIAIS ------------------------
     def inicia_bg(self):
@@ -292,21 +437,12 @@ class MeuJogo(arcade.Window):
                 self.inimigo_list.append(inimigo)
 
         # Textos fixos
-        self.score_text = arcade.Text("0", 5, ALT_TELA - 5, arcade.color.WHITE, 20, anchor_y="top", bold=True, font_name="Courier New")
-        self.game_over_text = arcade.Text(
-            "GAME OVER", LARG_TELA / 2, ALT_TELA / 2,
-            arcade.color.RED, 60, anchor_x="center", anchor_y="center", bold=True, font_name="Courier New"
-        )
-        self.pause_text = arcade.Text(
-            "PAUSE", LARG_TELA / 2, ALT_TELA / 2,
-            arcade.color.GREEN, 60, anchor_x="center", anchor_y="center", bold=True, font_name="Courier New"
-        )
-
         self.placar = 0
-        self.game_over = False
+        self.score_text.text = str(self.placar)
         self.revive = 0
         self.bonus_ufo = 0
         self.speed_timer = 0
+        self.pausado = False
 
     # ------------------------ MÉTODOS DE SUPORTE ------------------------
     def cria_explosao(self, x, y):
@@ -335,167 +471,180 @@ class MeuJogo(arcade.Window):
     def on_draw(self):
         self.clear()
         self.estrela_list.draw()
-        self.nave_list.draw()
-        self.vida_list.draw()
-        self.fase_list.draw()
-        self.missil_list.draw()
-        self.inimigo_list.draw()
-        self.inimissil_list.draw()
-        self.ufo_list.draw()
-        self.explosao_list.draw()
-        self.powerup_list.draw()
-        self.score_text.draw()
-        if self.game_over:
+
+        if self.game_state == GAME_STATE_MENU:
+            self.title_text.draw()
+        elif self.game_state == GAME_STATE_PLAYING:
+            self.nave_list.draw()
+            self.vida_list.draw()
+            self.fase_list.draw()
+            self.missil_list.draw()
+            self.inimigo_list.draw()
+            self.inimissil_list.draw()
+            self.ufo_list.draw()
+            self.explosao_list.draw()
+            self.powerup_list.draw()
+            self.score_text.draw()
+            if self.pausado:
+                self.pause_text.draw()
+        elif self.game_state == GAME_STATE_GAME_OVER:
             self.game_over_text.draw()
-        if self.pausado:
-            self.pause_text.draw()
+            self.score_text.draw()
+
+        self.manager.draw()
 
     # ------------------------ UPDATE ------------------------
     def on_update(self, delta_time: float):
-        if self.pausado or self.game_over:
-            return
-
-        # Atualizar listas
         self.estrela_list.update()
-        self.nave_list.update()
-        self.missil_list.update()
-        self.inimigo_list.update()
-        self.inimissil_list.update()
-        self.ufo_list.update()
-        self.explosao_list.update()
-        self.powerup_list.update()
 
-        # Timer de invencibilidade
-        if self.revive:
-            self.revive += 1
-            if self.revive >= DT_REVIVE:
-                self.revive = 0
-                # Verifica se a nave ainda existe antes de tentar mudar o alpha
-                if self.nave_list:
-                    self.nave_list[0].alpha = 255
+        if self.game_state == GAME_STATE_PLAYING and not self.pausado:
+            # Atualizar listas
+            self.nave_list.update()
+            self.missil_list.update()
+            self.inimigo_list.update()
+            self.inimissil_list.update()
+            self.ufo_list.update()
+            self.explosao_list.update()
+            self.powerup_list.update()
 
-        # Timer de bônus do UFO (para disparo duplo)
-        if self.bonus_ufo:
-            self.bonus_ufo += 1
-            if self.bonus_ufo >= DT_UFO:
-                self.bonus_ufo = 0
+            # Timer de invencibilidade
+            if self.revive:
+                self.revive += 1
+                if self.revive >= DT_REVIVE:
+                    self.revive = 0
+                    if self.nave_list:
+                        self.nave_list[0].alpha = 255
 
-        # ----- Colisões dos mísseis do jogador -----
-        for missil in self.missil_list:
-            # Contra inimigos
-            inimigos_hit = arcade.check_for_collision_with_list(missil, self.inimigo_list)
-            if inimigos_hit:
-                missil.remove_from_sprite_lists()
-                for inimigo in inimigos_hit:
-                    self.cria_explosao(inimigo.center_x, inimigo.center_y)
-                    inimigo.remove_from_sprite_lists()
-                    self.placar += 1
-            # Contra inimísseis
-            inimissil_hit = arcade.check_for_collision_with_list(missil, self.inimissil_list)
-            if inimissil_hit:
-                missil.remove_from_sprite_lists()
-                for im in inimissil_hit:
-                    self.cria_explosao(im.center_x, im.center_y)
-                    im.remove_from_sprite_lists()
-            # Contra UFO
-            ufo_hit_this_frame = arcade.check_for_collision_with_list(missil, self.ufo_list)
-            if ufo_hit_this_frame:
-                missil.remove_from_sprite_lists()
-                for ufo in ufo_hit_this_frame:
-                    # Verifica se o UFO ainda está em alguma lista antes de tentar removê-lo novamente
-                    if ufo in self.ufo_list:
-                        self.cria_explosao(ufo.center_x, ufo.center_y)
-                        self.cria_powerup(ufo.center_x, ufo.center_y)
-                        ufo.remove_from_sprite_lists()
-            # Fora da tela
-            if missil.bottom > ALT_TELA:
-                missil.remove_from_sprite_lists()
+            # Timer de bônus do UFO
+            if self.bonus_ufo:
+                self.bonus_ufo += 1
+                if self.bonus_ufo >= DT_UFO:
+                    self.bonus_ufo = 0
 
-        # ----- Colisões dos mísseis inimigos -----
-        for inimissil in self.inimissil_list:
-            # Verifica se a nave existe e se não está invencível
-            if self.nave_list and self.revive == 0 and arcade.check_for_collision_with_list(inimissil, self.nave_list):
-                self.cria_explosao(inimissil.center_x, inimissil.center_y)
-                inimissil.remove_from_sprite_lists()
-                if self.vida_list:
-                    self.revive = 1
-                    self.nave_list[0].alpha = 64
-                    vida = self.vida_list.pop()
-                    vida.remove_from_sprite_lists()
-                else:
-                    self.game_over = True
-            if inimissil.top < 0:
-                inimissil.remove_from_sprite_lists()
+            # ----- Colisões dos mísseis do jogador -----
+            for missil in self.missil_list:
+                inimigos_hit = arcade.check_for_collision_with_list(missil, self.inimigo_list)
+                if inimigos_hit:
+                    missil.remove_from_sprite_lists()
+                    for inimigo in inimigos_hit:
+                        self.cria_explosao(inimigo.center_x, inimigo.center_y)
+                        inimigo.remove_from_sprite_lists()
+                        self.placar += 1
+                inimissil_hit = arcade.check_for_collision_with_list(missil, self.inimissil_list)
+                if inimissil_hit:
+                    missil.remove_from_sprite_lists()
+                    for im in inimissil_hit:
+                        self.cria_explosao(im.center_x, im.center_y)
+                        im.remove_from_sprite_lists()
+                ufo_hit_this_frame = arcade.check_for_collision_with_list(missil, self.ufo_list)
+                if ufo_hit_this_frame:
+                    missil.remove_from_sprite_lists()
+                    for ufo in ufo_hit_this_frame:
+                        if ufo in self.ufo_list:
+                            self.cria_explosao(ufo.center_x, ufo.center_y)
+                            self.cria_powerup(ufo.center_x, ufo.center_y)
+                            ufo.remove_from_sprite_lists()
+                if missil.bottom > ALT_TELA:
+                    missil.remove_from_sprite_lists()
 
-        # ----- Power-ups -----
-        if self.nave_list:
-            for power in arcade.check_for_collision_with_list(self.nave_list[0], self.powerup_list):
-                if power.tipo == "speed":
-                    self.speed_timer = DT_SPEED_BOOST
-                elif power.tipo == "life" and len(self.vida_list) < 5:
-                    path_ui = os.path.join("spaceshooter", "PNG", "UI")
-                    vida = arcade.Sprite(os.path.join(path_ui, "playerLife2_red.png"), ESCALA_VIDA)
-                    vida.left = 1.2 * len(self.vida_list) * vida.width
-                    vida.bottom = 0
-                    self.vida_list.append(vida)
-                power.remove_from_sprite_lists()
+            # ----- Colisões dos mísseis inimigos -----
+            for inimissil in self.inimissil_list:
+                if self.nave_list and self.revive == 0 and arcade.check_for_collision_with_list(inimissil, self.nave_list):
+                    self.cria_explosao(inimissil.center_x, inimissil.center_y)
+                    inimissil.remove_from_sprite_lists()
+                    if self.vida_list:
+                        self.revive = 1
+                        self.nave_list[0].alpha = 64
+                        vida = self.vida_list.pop()
+                        vida.remove_from_sprite_lists()
+                    else:
+                        self.game_state = GAME_STATE_GAME_OVER
+                        self.set_mouse_visible(True)
+                        self.set_active_buttons(self.game_state)
+                        if self.music_player:
+                            self.music_player.pause()
+                if inimissil.top < 0:
+                    inimissil.remove_from_sprite_lists()
 
-        # ----- Colisão nave / inimigos -----
-        # Verifique se a nave existe antes da colisão.
-        if self.nave_list and arcade.check_for_collision_with_list(self.nave_list[0], self.inimigo_list):
-            self.game_over = True
+            # ----- Power-ups -----
+            if self.nave_list:
+                for power in arcade.check_for_collision_with_list(self.nave_list[0], self.powerup_list):
+                    if power.tipo == "speed":
+                        self.speed_timer = DT_SPEED_BOOST
+                    elif power.tipo == "life" and len(self.vida_list) < 5:
+                        path_ui = os.path.join("spaceshooter", "PNG", "UI")
+                        vida = arcade.Sprite(os.path.join(path_ui, "playerLife2_red.png"), ESCALA_VIDA)
+                        vida.left = 1.2 * len(self.vida_list) * vida.width
+                        vida.bottom = 0
+                        self.vida_list.append(vida)
+                    power.remove_from_sprite_lists()
 
-        # ----- Movimento dos inimigos e direção -----
-        if self.inimigo_list:
-            x_min = min([inimigo.left for inimigo in self.inimigo_list])
-            x_max = max([inimigo.right for inimigo in self.inimigo_list])
-            if x_min < 0 or x_max > LARG_TELA:
-                for inimigo in self.inimigo_list:
-                    inimigo.change_x = -inimigo.change_x
-                    if abs(inimigo.change_x) < self.vel_inimigo_x * 2:
-                        inimigo.change_x += math.copysign(A_X_INIMIGO, inimigo.change_x)
-                    inimigo.center_y -= V_Y_INIMIGO
-        # Caso não haja inimigos, garante que x_min e x_max não sejam acessados de uma lista vazia.
-        else:
-            x_min = 0
-            x_max = 0
+            # ----- Colisão nave / inimigos -----
+            if self.nave_list and arcade.check_for_collision_with_list(self.nave_list[0], self.inimigo_list):
+                self.game_state = GAME_STATE_GAME_OVER
+                self.set_mouse_visible(True)
+                self.set_active_buttons(self.game_state)
+                if self.music_player:
+                    self.music_player.pause()
 
-        # ----- Inimigos atirando -----
-        for inimigo in self.inimigo_list:
-            if random.randrange(self.p_inimissil) == 0:
-                path_laser = os.path.join("spaceshooter", "PNG", "Lasers")
-                inimissil = InimissilSprite(os.path.join(path_laser, "laserGreen04.png"), inimigo)
-                self.inimissil_list.append(inimissil)
-
-        # ----- Criação de UFO -----
-        if not self.ufo_list and random.randrange(P_UFO) == 0:
-            path_png = os.path.join("spaceshooter", "PNG")
-            ufo = arcade.Sprite(os.path.join(path_png, "ufoBlue.png"), ESCALA_UFO)
-            if random.random() < 0.5:
-                ufo.change_x = V_X_UFO
-                ufo.left = -ufo.width
+            # ----- Movimento dos inimigos e direção -----
+            if self.inimigo_list:
+                x_min = min([inimigo.left for inimigo in self.inimigo_list])
+                x_max = max([inimigo.right for inimigo in self.inimigo_list])
+                if x_min < 0 or x_max > LARG_TELA:
+                    for inimigo in self.inimigo_list:
+                        inimigo.change_x = -inimigo.change_x
+                        if abs(inimigo.change_x) < self.vel_inimigo_x * 2:
+                            inimigo.change_x += math.copysign(A_X_INIMIGO, inimigo.change_x)
+                        inimigo.center_y -= V_Y_INIMIGO
             else:
-                ufo.change_x = -V_X_UFO
-                ufo.right = LARG_TELA + ufo.width
-            ufo.top = ALT_TELA - 50
-            self.ufo_list.append(ufo)
+                x_min = 0
+                x_max = 0
 
-        for ufo in self.ufo_list:
-            if (ufo.left >= LARG_TELA and ufo.change_x > 0) or \
-               (ufo.right <= 0 and ufo.change_x < 0):
-                ufo.remove_from_sprite_lists()
+            # ----- Inimigos atirando -----
+            for inimigo in self.inimigo_list:
+                if random.randrange(self.p_inimissil) == 0:
+                    path_laser = os.path.join("spaceshooter", "PNG", "Lasers")
+                    inimissil = InimissilSprite(os.path.join(path_laser, "laserGreen04.png"), inimigo)
+                    self.inimissil_list.append(inimissil)
 
-        # ----- Próxima fase -----
-        if not self.inimigo_list:
-            self.fase += 1
-            self.inicia_jogo()
+            # ----- Criação de UFO -----
+            if not self.ufo_list and random.randrange(P_UFO) == 0:
+                path_png = os.path.join("spaceshooter", "PNG")
+                ufo = arcade.Sprite(os.path.join(path_png, "ufoBlue.png"), ESCALA_UFO)
+                if random.random() < 0.5:
+                    ufo.change_x = V_X_UFO
+                    ufo.left = -ufo.width
+                else:
+                    ufo.change_x = -V_X_UFO
+                    ufo.right = LARG_TELA + ufo.width
+                ufo.top = ALT_TELA - 50
+                self.ufo_list.append(ufo)
 
-        # Atualiza HUD
-        self.score_text.text = str(self.placar)
+            for ufo in self.ufo_list:
+                if (ufo.left >= LARG_TELA and ufo.change_x > 0) or \
+                   (ufo.right <= 0 and ufo.change_x < 0):
+                    ufo.remove_from_sprite_lists()
+
+            # ----- Próxima fase -----
+            if not self.inimigo_list:
+                self.fase += 1
+                self.inicia_jogo()
+
+            # Atualiza HUD
+            self.score_text.text = str(self.placar)
 
     # ------------------------ INPUT ------------------------
     def on_key_press(self, key, modifiers):
-        # Verifica se a lista de nave não está vazia antes de tentar acessar o elemento 0
+        if self.game_state == GAME_STATE_MENU:
+            if key == arcade.key.SPACE:
+                self.on_start_button_click(None)
+            return
+        elif self.game_state == GAME_STATE_GAME_OVER:
+            if key == arcade.key.SPACE:
+                self.on_restart_button_click(None)
+            return
+
         if not self.nave_list:
             return
 
@@ -504,25 +653,24 @@ class MeuJogo(arcade.Window):
 
         if key == arcade.key.P:
             self.pausado = not self.pausado
+            if self.music_player:
+                if self.pausado:
+                    self.music_player.pause()
+                else:
+                    self.music_player.play()
         elif key == arcade.key.LEFT:
             nave.change_x = -velocidade
         elif key == arcade.key.RIGHT:
             nave.change_x = velocidade
-        elif key == arcade.key.SPACE:
-            # Disparo ou reinício do jogo
-            if self.game_over:
-                self.fase = 1
-                self.inicia_jogo()
-            else:
-                # Permite disparo duplo se bonus_ufo estiver ativo, ou um único tiro se não houver mísseis
-                if self.bonus_ufo or not self.missil_list:
-                    path_laser = os.path.join("spaceshooter", "PNG", "Lasers")
-                    missil = MissilSprite(os.path.join(path_laser, "laserRed01.png"), nave)
-                    self.missil_list.append(missil)
-                    arcade.play_sound(self.snd_shot)
+        elif key == arcade.key.SPACE and not self.pausado:
+            if self.bonus_ufo or not self.missil_list:
+                path_laser = os.path.join("spaceshooter", "PNG", "Lasers")
+                missil = MissilSprite(os.path.join(path_laser, "laserRed01.png"), nave)
+                self.missil_list.append(missil)
+                arcade.play_sound(self.snd_shot)
 
     def on_key_release(self, key, modifiers):
-        if not self.nave_list:
+        if self.game_state != GAME_STATE_PLAYING or not self.nave_list:
             return
 
         nave = self.nave_list[0]
@@ -534,7 +682,6 @@ class MeuJogo(arcade.Window):
 def main():
     window = MeuJogo()
     window.inicia_bg()
-    window.inicia_jogo()
     arcade.run()
 
 
